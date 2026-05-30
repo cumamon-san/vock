@@ -26,7 +26,7 @@ def generate(cov: dict[str, set[int]], kernel_src: str,
     data_json = json.dumps(
         {"files": files, "covered": covered, "lines": lines},
         ensure_ascii=False
-    )
+    ).replace("</", "<\\/")
 
     total_files = len(files)
     total_lines = sum(len(v) for v in covered.values())
@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded',function(){{
     var count=(DATA.covered[path]||[]).length;
     li.dataset.path=path;
     li.title=path;
-    li.innerHTML=path.split('/').pop()+' <span class="count">('+count+')</span>';
+    var name=document.createTextNode(path.split('/').pop()+' ');var cnt=document.createElement('span');cnt.className='count';cnt.textContent='('+count+')';li.appendChild(name);li.appendChild(cnt);
     li.onclick=function(){{renderFile(path);}};
     list.appendChild(li);
   }});

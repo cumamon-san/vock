@@ -94,3 +94,19 @@ def test_files_sorted_alphabetically():
 
         data = _parse_data(open(output).read())
         assert data["files"] == ["a/first.c", "z/last.c"]
+
+
+def test_script_tag_not_broken_by_source_content():
+    """Source lines containing </script> must not break the <script> block."""
+    with tempfile.TemporaryDirectory() as src:
+        os.makedirs(os.path.join(src, "kernel"))
+        with open(os.path.join(src, "kernel/foo.c"), "w") as f:
+            f.write('/* see </script> in docs */\n')
+
+        output = os.path.join(src, "out.html")
+        generate({"kernel/foo.c": {1}}, src, 4, 4, output)
+
+        content = open(output).read()
+        data = _parse_data(content)
+        assert data["lines"]["kernel/foo.c"] == ['/* see </script> in docs */']
+        assert "</script>" not in content.split("</script>")[0].split("const DATA=")[1]
