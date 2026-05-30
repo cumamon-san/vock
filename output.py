@@ -112,7 +112,25 @@ def main():
             print("\033[93mno source lines resolved\033[0m")
         return
 
-    generate_html(cov, args.kernel_src, args.B, args.A, args.output, args.filter)
+    # Discover instrumented PCs from vmlinux ELF (optional: requires pyelftools)
+    instrumented_cov = None
+    if path.isfile(args.vmlinux):
+        try:
+            from report.elf import get_instrumented_pcs
+            if not args.quiet:
+                print("  Scanning vmlinux for instrumented PCs...")
+            inst_addrs = get_instrumented_pcs(args.vmlinux)
+            inst_lines = run_addr2line(args.vmlinux, inst_addrs)
+            instrumented_cov = aggregate(inst_lines, args.kernel_src)
+        except ImportError:
+            if not args.quiet:
+                print("\033[93m  pyelftools not installed; miss highlighting disabled\033[0m")
+        except Exception as e:
+            if not args.quiet:
+                print(f"\033[93m  ELF scan failed ({e}); miss highlighting disabled\033[0m")
+
+    generate_html(cov, args.kernel_src, args.B, args.A, args.output, args.filter,
+                  instrumented_cov)
     if not args.quiet:
         print(f"\n\033[92m✓ Written: {args.output}\033[0m")
 
