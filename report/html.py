@@ -20,7 +20,7 @@ def generate(cov: dict[str, set[int]], kernel_src: str,
         full = src_root / fpath
         try:
             lines[fpath] = full.read_text(errors="ignore").splitlines()
-        except FileNotFoundError:
+        except OSError:
             lines[fpath] = None
 
     data_json = json.dumps(
