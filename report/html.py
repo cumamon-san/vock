@@ -115,10 +115,15 @@ function buildTree(files){{
   }});
   return root;
 }}
+function fmt(cov,tot){{
+  if(tot===0)return cov+' / 0';
+  return cov+' / '+tot+' ('+Math.round(cov/tot*100)+'%)';
+}}
 function renderTreeNode(node,prefix,ul){{
   var keys=Object.keys(node).sort();
   var dirs=[],files=[];
   keys.forEach(function(k){{(node[k]===null?files:dirs).push(k);}});
+  var sumCov=0,sumTot=0;
   dirs.forEach(function(dir){{
     var li=document.createElement('li');li.className='dir';
     var tog=document.createElement('span');tog.className='dir-toggle';tog.textContent='▶';
@@ -127,18 +132,24 @@ function renderTreeNode(node,prefix,ul){{
     function toggle(){{var open=sub.style.display!=='none';sub.style.display=open?'none':'';tog.textContent=open?'▶':'▼';}}
     tog.onclick=toggle;lbl.onclick=toggle;
     li.appendChild(tog);li.appendChild(lbl);li.appendChild(sub);ul.appendChild(li);
-    renderTreeNode(node[dir],prefix+dir+'/',sub);
+    var s=renderTreeNode(node[dir],prefix+dir+'/',sub);
+    sumCov+=s.cov;sumTot+=s.tot;
+    var cnt=document.createElement('span');cnt.className='count';cnt.textContent=' '+fmt(s.cov,s.tot);
+    li.appendChild(cnt);
   }});
   files.forEach(function(file){{
     var path=prefix+file;
-    var count=(DATA.covered[path]||[]).length;
+    var cov=(DATA.covered[path]||[]).length;
+    var tot=DATA.lines[path]?DATA.lines[path].length:0;
+    sumCov+=cov;sumTot+=tot;
     var li=document.createElement('li');li.className='file';li.dataset.path=path;li.title=path;
     var name=document.createTextNode(file+' ');
-    var cnt=document.createElement('span');cnt.className='count';cnt.textContent='('+count+')';
+    var cnt=document.createElement('span');cnt.className='count';cnt.textContent=fmt(cov,tot);
     li.appendChild(name);li.appendChild(cnt);
     li.onclick=function(){{renderFile(path);}};
     ul.appendChild(li);
   }});
+  return {{cov:sumCov,tot:sumTot}};
 }}
 function applyFilter(q){{
   var files=document.querySelectorAll('#file-list li.file');
