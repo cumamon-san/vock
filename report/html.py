@@ -14,6 +14,8 @@ def generate(cov: dict[str, set[int]], kernel_src: str,
     lines = {}
     inst = {}
 
+    total_inst = sum(len(v) for v in instrumented.values()) if instrumented else 0
+
     for fpath, cov_lines in sorted(cov.items()):
         if filter_kw and filter_kw not in fpath:
             continue
@@ -27,6 +29,22 @@ def generate(cov: dict[str, set[int]], kernel_src: str,
         if instrumented and fpath in instrumented:
             inst[fpath] = sorted(instrumented[fpath])
 
+    # Include files with instrumented lines but zero coverage (100% miss)
+    if instrumented:
+        for fpath in sorted(instrumented):
+            if filter_kw and filter_kw not in fpath:
+                continue
+            if fpath in covered:
+                continue  # already handled above
+            files.append(fpath)
+            covered[fpath] = []
+            full = src_root / fpath
+            try:
+                lines[fpath] = full.read_text(errors="ignore").splitlines()
+            except OSError:
+                lines[fpath] = None
+            inst[fpath] = sorted(instrumented[fpath])
+
     data_json = json.dumps(
         {"files": files, "covered": covered, "lines": lines, "instrumented": inst},
         ensure_ascii=False
@@ -34,7 +52,6 @@ def generate(cov: dict[str, set[int]], kernel_src: str,
 
     total_files = len(files)
     total_lines = sum(len(v) for v in covered.values())
-    total_inst = sum(len(v) for v in inst.values()) if inst else 0
     summary = (
         f"{total_files} files &mdash; {total_lines} / {total_inst} instrumented lines covered"
         if total_inst else
@@ -120,7 +137,7 @@ function renderFile(path){{
 }}
 function fmt(cov,tot){{
   if(tot===0)return cov+' / 0';
-  return cov+' / '+tot+' ('+Math.round(cov/tot*100)+'%)';
+  return cov+' / '+tot+' ('+Math.min(100,Math.round(cov/tot*100))+'%)';
 }}
 function buildTree(files){{
   var root={{}};

@@ -179,3 +179,26 @@ def test_filter_kw_applied_to_instrumented():
         data = _parse_data(open(output).read())
         assert "net/socket.c" not in data["instrumented"]
         assert "kernel/sched/core.c" in data["instrumented"]
+
+
+def test_instrumented_only_file_appears_in_files():
+    """Files with instrumented lines but zero coverage appear in DATA.files."""
+    with tempfile.TemporaryDirectory() as src:
+        os.makedirs(os.path.join(src, "kernel"))
+        open(os.path.join(src, "kernel/covered.c"), "w").write("a\nb\n")
+        open(os.path.join(src, "kernel/uncovered.c"), "w").write("x\ny\n")
+
+        output = os.path.join(src, "out.html")
+        generate(
+            {"kernel/covered.c": {1}},
+            src, 4, 4, output,
+            instrumented={
+                "kernel/covered.c": {1, 2},
+                "kernel/uncovered.c": {1, 2},
+            },
+        )
+
+        data = _parse_data(open(output).read())
+        assert "kernel/uncovered.c" in data["files"]
+        assert data["covered"]["kernel/uncovered.c"] == []
+        assert data["instrumented"]["kernel/uncovered.c"] == [1, 2]
