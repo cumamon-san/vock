@@ -2,6 +2,7 @@
 
 #include "config.h"
 #include <sys/prctl.h>
+#include <sys/user.h>
 
 #ifndef PR_SET_SYSCALL_USER_DISPATCH
 # define PR_SET_SYSCALL_USER_DISPATCH	59
@@ -12,7 +13,7 @@
 #endif
 
 #ifndef SYS_USER_DISPATCH
-# define SYS_USER_DISPATCH 2
+//# define SYS_USER_DISPATCH 2
 #endif
 
 typedef struct {
