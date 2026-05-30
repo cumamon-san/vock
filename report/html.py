@@ -44,9 +44,9 @@ h1 {{ color: #569cd6; display: inline; font-size: 1.1em; }}
 #sidebar {{ width: 280px; flex-shrink: 0; background: #252526; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; }}
 #filter {{ width: 100%; padding: 8px 10px; background: #3c3c3c; border: none; color: #d4d4d4; font-family: monospace; font-size: 0.85em; outline: none; flex-shrink: 0; }}
 #filter::placeholder {{ color: #858585; }}
-#file-list {{ list-style: none; overflow-y: auto; flex: 1; }}
+#file-list {{ list-style: none; overflow-y: auto; flex: 1; font-size: 0.8em; }}
 #file-list ul {{ list-style: none; padding-left: 12px; }}
-#file-list li {{ font-size: 0.8em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+#file-list li {{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 #file-list li.file {{ padding: 3px 10px; cursor: pointer; color: #ce9178; }}
 #file-list li.file:hover {{ background: #2a2d2e; }}
 #file-list li.file.active {{ background: #094771; color: #d4d4d4; }}
