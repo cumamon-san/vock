@@ -5,11 +5,12 @@ from elftools.elf.relocation import RelocationSection
 
 _TRACE_PC_NAMES = frozenset({
     '__sanitizer_cov_trace_pc',
-    '____sanitizer_cov_trace_pc_veneer',  # ARM64 veneer
+    # ld.lld AArch64 range thunk: "__" + name + "_veneer" → four leading underscores
+    '____sanitizer_cov_trace_pc_veneer',
 })
 
 
-def get_instrumented_pcs(vmlinux_path):
+def get_instrumented_pcs(vmlinux_path: str) -> list[str]:
     """Return hex addresses of all KCOV-instrumented PCs in vmlinux.
 
     Scans SHT_RELA sections for relocations targeting __sanitizer_cov_trace_pc,

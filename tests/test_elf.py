@@ -5,10 +5,10 @@ import pytest
 from report.elf import get_instrumented_pcs
 
 
-def _build_test_elf(pc_offset=0xffffffff81001234):
-    """Build a minimal x86_64 ELF64 with one __sanitizer_cov_trace_pc RELA entry."""
+def _build_test_elf(pc_offset=0xffffffff81001234, symbol_name='__sanitizer_cov_trace_pc'):
+    """Build a minimal x86_64 ELF64 with one KCOV RELA entry (or other symbol if specified)."""
     # Symbol string table: offset 0 = "", offset 1 = symbol name
-    strtab = b'\x00__sanitizer_cov_trace_pc\x00'   # 26 bytes
+    strtab = b'\x00' + symbol_name.encode() + b'\x00'
 
     # Section name string table
     # offsets: .strtab=1, .shstrtab=9, .symtab=19, .rela.text=27
@@ -77,37 +77,9 @@ def test_finds_kcov_relocation():
 
 def test_no_kcov_symbol_returns_empty():
     """ELF without __sanitizer_cov_trace_pc returns empty list."""
-    # Build ELF with a different symbol name (no KCOV)
-    strtab = b'\x00other_function\x00'
-    shstrtab = b'\x00.strtab\x00.shstrtab\x00.symtab\x00'
-    shstr_idx = {'.strtab': 1, '.shstrtab': 9, '.symtab': 19}
-    sym0 = struct.pack('<IBBHQQ', 0, 0, 0, 0, 0, 0)
-    sym1 = struct.pack('<IBBHQQ', 1, (1 << 4) | 2, 0, 0, 0, 0)
-    symtab = sym0 + sym1
-    strtab_off = 64
-    shstrtab_off = strtab_off + len(strtab)
-    symtab_off = shstrtab_off + len(shstrtab)
-    shdrs_off = symtab_off + len(symtab)
-    SHT_NULL, SHT_STRTAB, SHT_SYMTAB = 0, 3, 2
-    def shdr(name, type_, offset, size, link, info, entsize):
-        return struct.pack('<IIQQQQIIQQ', name, type_, 0, 0, offset, size, link, info, 8, entsize)
-    shdrs = (
-        shdr(0,                       SHT_NULL,   0,            0,             0, 0,  0) +
-        shdr(shstr_idx['.strtab'],    SHT_STRTAB, strtab_off,   len(strtab),   0, 0,  0) +
-        shdr(shstr_idx['.shstrtab'],  SHT_STRTAB, shstrtab_off, len(shstrtab), 0, 0,  0) +
-        shdr(shstr_idx['.symtab'],    SHT_SYMTAB, symtab_off,   len(symtab),   1, 1, 24)
-    )
-    e_ident = b'\x7fELF\x02\x01\x01\x00' + b'\x00' * 8
-    elf_hdr = e_ident + struct.pack('<HHIQQQIHHHHHH',
-        2, 62, 1, 0, 0, shdrs_off, 0, 64, 0, 0, 64, 4, 2)
-    data = bytearray(shdrs_off + len(shdrs))
-    data[0:64] = elf_hdr
-    data[strtab_off:strtab_off+len(strtab)] = strtab
-    data[shstrtab_off:shstrtab_off+len(shstrtab)] = shstrtab
-    data[symtab_off:symtab_off+len(symtab)] = symtab
-    data[shdrs_off:] = shdrs
+    elf_data = _build_test_elf(symbol_name='other_function')
     with tempfile.NamedTemporaryFile(suffix='.elf', delete=False) as f:
-        f.write(bytes(data))
+        f.write(elf_data)
         tmp = f.name
     try:
         result = get_instrumented_pcs(tmp)
