@@ -128,21 +128,36 @@ def test_instrumented_key_in_data_json():
 
 
 def test_no_instrumented_gives_empty_dict():
-    """DATA.instrumented is {} when instrumented=None."""
+    """DATA.instrumented is {} when instrumented=None (non-empty cov)."""
     with tempfile.TemporaryDirectory() as src:
+        fpath = "kernel/sched/core.c"
+        os.makedirs(os.path.join(src, "kernel/sched"))
+        open(os.path.join(src, fpath), "w").write("a\n")
+
         output = os.path.join(src, "out.html")
-        generate({}, src, 4, 4, output)
+        generate({"kernel/sched/core.c": {1}}, src, 4, 4, output)
 
         data = _parse_data(open(output).read())
         assert data["instrumented"] == {}
 
 
 def test_miss_css_class_present():
-    """.miss CSS class is defined in HTML output."""
+    """.miss CSS class present; miss line appears in DATA when instrumented but not covered."""
     with tempfile.TemporaryDirectory() as src:
+        fpath = "kernel/sched/core.c"
+        os.makedirs(os.path.join(src, "kernel/sched"))
+        with open(os.path.join(src, fpath), "w") as f:
+            f.write("covered\nnot_hit\ncontext\n")
+
         output = os.path.join(src, "out.html")
-        generate({}, src, 4, 4, output)
-        assert ".miss" in open(output).read()
+        generate({"kernel/sched/core.c": {1}}, src, 4, 4, output,
+                 instrumented={"kernel/sched/core.c": {1, 2}})
+
+        content = open(output).read()
+        assert ".miss" in content
+        data = _parse_data(content)
+        assert 2 in data["instrumented"]["kernel/sched/core.c"]
+        assert 2 not in data["covered"]["kernel/sched/core.c"]
 
 
 def test_filter_kw_applied_to_instrumented():

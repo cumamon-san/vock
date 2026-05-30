@@ -34,6 +34,12 @@ def generate(cov: dict[str, set[int]], kernel_src: str,
 
     total_files = len(files)
     total_lines = sum(len(v) for v in covered.values())
+    total_inst = sum(len(v) for v in inst.values()) if inst else 0
+    summary = (
+        f"{total_files} files &mdash; {total_lines} / {total_inst} instrumented lines covered"
+        if total_inst else
+        f"{total_files} files &mdash; {total_lines} covered lines"
+    )
     no_files_msg = "" if files else '<span class="ctx">No files covered</span>'
 
     html = f"""<!DOCTYPE html>
@@ -70,7 +76,7 @@ pre {{ padding: 10px 16px; }}
 <body>
 <header>
   <h1>vock kernel coverage report</h1>
-  <span class="summary">{total_files} files &mdash; {total_lines} covered lines</span>
+  <span class="summary">{summary}</span>
 </header>
 <div class="main">
   <div id="sidebar">
