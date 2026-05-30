@@ -112,14 +112,9 @@ def main():
             print("\033[93mno source lines resolved\033[0m")
         return
 
-    # HTML output
     generate_html(cov, args.kernel_src, args.B, args.A, args.output, args.filter)
     if not args.quiet:
         print(f"\n\033[92m✓ Written: {args.output}\033[0m")
-
-    # Terminal output
-    if not args.quiet:
-        print_report(cov, args.kernel_src, args.B, args.A, args.filter)
 
 
 if __name__ == "__main__":
