@@ -109,3 +109,58 @@ def test_script_tag_not_broken_by_source_content():
         data = _parse_data(content)
         assert data["lines"]["kernel/foo.c"] == ['/* see </script> in docs */']
         assert "</script>" not in content.split("</script>")[0].split("const DATA=")[1]
+
+
+def test_instrumented_key_in_data_json():
+    """DATA.instrumented contains sorted instrumented line numbers when provided."""
+    with tempfile.TemporaryDirectory() as src:
+        fpath = "kernel/sched/core.c"
+        os.makedirs(os.path.join(src, "kernel/sched"))
+        with open(os.path.join(src, fpath), "w") as f:
+            f.write("line one\nline two\nline three\nline four\n")
+
+        output = os.path.join(src, "out.html")
+        generate({"kernel/sched/core.c": {2}}, src, 4, 4, output,
+                 instrumented={"kernel/sched/core.c": {2, 3}})
+
+        data = _parse_data(open(output).read())
+        assert data["instrumented"]["kernel/sched/core.c"] == [2, 3]
+
+
+def test_no_instrumented_gives_empty_dict():
+    """DATA.instrumented is {} when instrumented=None."""
+    with tempfile.TemporaryDirectory() as src:
+        output = os.path.join(src, "out.html")
+        generate({}, src, 4, 4, output)
+
+        data = _parse_data(open(output).read())
+        assert data["instrumented"] == {}
+
+
+def test_miss_css_class_present():
+    """.miss CSS class is defined in HTML output."""
+    with tempfile.TemporaryDirectory() as src:
+        output = os.path.join(src, "out.html")
+        generate({}, src, 4, 4, output)
+        assert ".miss" in open(output).read()
+
+
+def test_filter_kw_applied_to_instrumented():
+    """filter_kw excludes files from DATA.instrumented as well as DATA.covered."""
+    with tempfile.TemporaryDirectory() as src:
+        os.makedirs(os.path.join(src, "kernel/sched"))
+        os.makedirs(os.path.join(src, "net"))
+        open(os.path.join(src, "kernel/sched/core.c"), "w").write("a\n")
+        open(os.path.join(src, "net/socket.c"), "w").write("b\n")
+
+        output = os.path.join(src, "out.html")
+        generate(
+            {"kernel/sched/core.c": {1}, "net/socket.c": {1}},
+            src, 4, 4, output,
+            filter_kw="sched",
+            instrumented={"kernel/sched/core.c": {1, 2}, "net/socket.c": {1, 2}},
+        )
+
+        data = _parse_data(open(output).read())
+        assert "net/socket.c" not in data["instrumented"]
+        assert "kernel/sched/core.c" in data["instrumented"]

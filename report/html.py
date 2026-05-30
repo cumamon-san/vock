@@ -4,13 +4,15 @@ from pathlib import Path
 
 
 def generate(cov: dict[str, set[int]], kernel_src: str,
-             before: int, after: int, output_path: str, filter_kw: str = None):
+             before: int, after: int, output_path: str,
+             filter_kw: str = None, instrumented: dict[str, set[int]] = None):
     """Write coverage.html with sidebar navigation and full file display."""
     src_root = Path(kernel_src)
 
     files = []
     covered = {}
     lines = {}
+    inst = {}
 
     for fpath, cov_lines in sorted(cov.items()):
         if filter_kw and filter_kw not in fpath:
@@ -22,9 +24,11 @@ def generate(cov: dict[str, set[int]], kernel_src: str,
             lines[fpath] = full.read_text(errors="ignore").splitlines()
         except OSError:
             lines[fpath] = None
+        if instrumented and fpath in instrumented:
+            inst[fpath] = sorted(instrumented[fpath])
 
     data_json = json.dumps(
-        {"files": files, "covered": covered, "lines": lines},
+        {"files": files, "covered": covered, "lines": lines, "instrumented": inst},
         ensure_ascii=False
     ).replace("</", "<\\/")
 
@@ -59,6 +63,7 @@ h1 {{ color: #569cd6; display: inline; font-size: 1.1em; }}
 #content {{ overflow: auto; flex: 1; }}
 pre {{ padding: 10px 16px; }}
 .cov {{ background: #1e3a1e; color: #4ec9b0; display: block; }}
+.miss {{ background: #3a1e1e; color: #f48771; display: block; }}
 .ctx {{ color: #808080; display: block; }}
 .ln {{ color: #858585; display: inline-block; width: 5em; text-align: right; margin-right: 1em; user-select: none; }}
 </style></head>
@@ -87,6 +92,7 @@ function renderFile(path){{
   var header=document.getElementById('file-header');
   var content=document.getElementById('content');
   var covSet=new Set(DATA.covered[path]||[]);
+  var instSet=new Set(DATA.instrumented[path]||[]);
   header.textContent=path+' ('+covSet.size+' covered lines)';
   if(cache[path]!==undefined){{content.innerHTML=cache[path];return;}}
   var fileLines=DATA.lines[path];
@@ -98,13 +104,17 @@ function renderFile(path){{
   fileLines.forEach(function(line,i){{
     var ln=i+1;
     var esc=line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    var cls=covSet.has(ln)?'cov':'ctx';
-    var mark=covSet.has(ln)?'&gt;':'|';
+    var cls=covSet.has(ln)?'cov':(instSet.has(ln)?'miss':'ctx');
+    var mark=covSet.has(ln)?'&gt;':(instSet.has(ln)?'!':'|');
     buf+='<span class="'+cls+'"><span class="ln">'+ln+'</span> '+mark+' '+esc+'</span>\\n';
   }});
   buf+='</pre>';
   cache[path]=buf;
   content.innerHTML=buf;
+}}
+function fmt(cov,tot){{
+  if(tot===0)return cov+' / 0';
+  return cov+' / '+tot+' ('+Math.round(cov/tot*100)+'%)';
 }}
 function buildTree(files){{
   var root={{}};
@@ -114,10 +124,6 @@ function buildTree(files){{
     node[parts[parts.length-1]]=null;
   }});
   return root;
-}}
-function fmt(cov,tot){{
-  if(tot===0)return cov+' / 0';
-  return cov+' / '+tot+' ('+Math.round(cov/tot*100)+'%)';
 }}
 function renderTreeNode(node,prefix,ul){{
   var keys=Object.keys(node).sort();
@@ -140,7 +146,8 @@ function renderTreeNode(node,prefix,ul){{
   files.forEach(function(file){{
     var path=prefix+file;
     var cov=(DATA.covered[path]||[]).length;
-    var tot=DATA.lines[path]?DATA.lines[path].length:0;
+    var instArr=DATA.instrumented[path];
+    var tot=instArr&&instArr.length?instArr.length:(DATA.lines[path]?DATA.lines[path].length:0);
     sumCov+=cov;sumTot+=tot;
     var li=document.createElement('li');li.className='file';li.dataset.path=path;li.title=path;
     var name=document.createTextNode(file+' ');
