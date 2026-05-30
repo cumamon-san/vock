@@ -9,8 +9,8 @@ def _parse_data(html: str) -> dict:
     """Extract and parse the DATA JSON object from generated HTML."""
     marker = "const DATA="
     start = html.index(marker) + len(marker)
-    end = html.index("</script>", start)
-    return json.loads(html[start:end].rstrip("; \n"))
+    end = html.index(";\n", start)
+    return json.loads(html[start:end])
 
 
 def test_data_json_structure():
@@ -79,3 +79,18 @@ def test_html_contains_sidebar_and_js():
         assert "file-list" in content
         assert "renderFile" in content
         assert 'id="filter"' in content
+
+
+def test_files_sorted_alphabetically():
+    """DATA.files list is sorted alphabetically regardless of input order."""
+    with tempfile.TemporaryDirectory() as src:
+        os.makedirs(os.path.join(src, "z"))
+        os.makedirs(os.path.join(src, "a"))
+        open(os.path.join(src, "z/last.c"), "w").write("x\n")
+        open(os.path.join(src, "a/first.c"), "w").write("y\n")
+
+        output = os.path.join(src, "out.html")
+        generate({"z/last.c": {1}, "a/first.c": {1}}, src, 4, 4, output)
+
+        data = _parse_data(open(output).read())
+        assert data["files"] == ["a/first.c", "z/last.c"]
