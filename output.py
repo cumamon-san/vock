@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """vock output — coverage report generator.
 
-Reads kerncov.log, resolves to source via addr2line, outputs coverage.html + terminal.
+Reads kerncov.log, resolves to source via addr2line, outputs coverage.html.
 """
 import argparse
 import time
@@ -11,7 +11,6 @@ from os import path
 from report.kaslr import detect_kaslr_offset, dekaslr_addresses
 from report.resolve import run_addr2line, aggregate
 from report.html import generate as generate_html
-from report.terminal import print_report
 
 DEFAULT_KERNEL_SRC = str(Path.home() / "stable")
 DEFAULT_VMLINUX = str(Path.home() / "stable" / "vmlinux")
