@@ -1,50 +1,11 @@
-"""Discover KCOV-instrumented lines from vmlinux (ELF RELA or DWARF fallback)."""
+"""Discover KCOV-instrumented lines from vmlinux via DWARF .debug_line."""
 import subprocess
 from os import path as osp
-from elftools.elf.elffile import ELFFile
-from elftools.elf.sections import SymbolTableSection
-from elftools.elf.relocation import RelocationSection
-
-_TRACE_PC_NAMES = frozenset({
-    '__sanitizer_cov_trace_pc',
-    # ld.lld AArch64 range thunk: "__" + name + "_veneer" → four leading underscores
-    '____sanitizer_cov_trace_pc_veneer',
-})
-
-
-def get_instrumented_pcs(vmlinux_path: str) -> list[str]:
-    """Return hex addresses of all KCOV-instrumented PCs in vmlinux.
-
-    Scans SHT_RELA sections for relocations targeting __sanitizer_cov_trace_pc,
-    matching the approach used by syzkaller's syz-cover tool.
-    """
-    with open(vmlinux_path, 'rb') as f:
-        elf = ELFFile(f)
-
-        symtab = elf.get_section_by_name('.symtab')
-        if symtab is None or not isinstance(symtab, SymbolTableSection):
-            return []
-
-        trace_indices = {
-            i for i, sym in enumerate(symtab.iter_symbols())
-            if sym.name in _TRACE_PC_NAMES
-        }
-        if not trace_indices:
-            return []
-
-        pcs = []
-        for section in elf.iter_sections():
-            if isinstance(section, RelocationSection) and section.is_RELA():
-                for rel in section.iter_relocations():
-                    if rel['r_info_sym'] in trace_indices:
-                        pcs.append(hex(rel['r_offset']))
-        return pcs
 
 
 def get_instrumented_lines_dwarf(vmlinux_path: str, kernel_src: str) -> dict[str, set[int]]:
     """Parse DWARF .debug_line via readelf to find all is_stmt source lines.
 
-    Fallback for kernels built without CONFIG_RELOCATABLE (no RELA sections).
     Uses statement-start entries from the DWARF line number program, which
     correspond to the lines KCOV instruments.
     """

@@ -86,7 +86,7 @@ def main():
     addrs = dekaslr_addresses(addrs, offset)
 
     # Resolve covered addresses
-    t = step(1, 4, f"Resolving {len(addrs):,} covered PCs via addr2line... ")
+    t = step(1, 3, f"Resolving {len(addrs):,} covered PCs via addr2line... ")
     lines = run_addr2line(args.vmlinux, addrs)
     cov = aggregate(lines, args.kernel_src)
     if not cov:
@@ -95,32 +95,18 @@ def main():
         return
     done(t, f"→ {sum(len(v) for v in cov.values()):,} lines in {len(cov):,} files")
 
-    # Scan vmlinux ELF for instrumented PCs (RELA) or lines (DWARF fallback)
+    # Scan vmlinux DWARF .debug_line for instrumented lines (miss highlighting)
     instrumented_cov = None
     try:
-        from report.elf import get_instrumented_pcs, get_instrumented_lines_dwarf
-        t = step(2, 4, "Scanning vmlinux ELF for instrumented PCs... ")
-        inst_addrs = get_instrumented_pcs(args.vmlinux)
-
-        if inst_addrs:
-            done(t, f"→ {len(inst_addrs):,} instrumented PCs (RELA)")
-            t = step(3, 4, f"Resolving {len(inst_addrs):,} instrumented PCs via addr2line... ")
-            inst_lines = run_addr2line(args.vmlinux, inst_addrs)
-            instrumented_cov = aggregate(inst_lines, args.kernel_src)
-            done(t, f"→ {sum(len(v) for v in instrumented_cov.values()):,} lines in {len(instrumented_cov):,} files")
-        else:
-            done(t, "no RELA sections; falling back to DWARF .debug_line")
-            t = step(3, 4, "Parsing DWARF .debug_line for instrumented lines... ")
-            instrumented_cov = get_instrumented_lines_dwarf(args.vmlinux, args.kernel_src)
-            done(t, f"→ {sum(len(v) for v in instrumented_cov.values()):,} lines in {len(instrumented_cov):,} files")
-    except ImportError:
-        if not q:
-            print(f"  [2/4] \033[93mpyelftools not installed; miss highlighting disabled\033[0m")
+        from report.elf import get_instrumented_lines_dwarf
+        t = step(2, 3, "Parsing DWARF .debug_line for instrumented lines... ")
+        instrumented_cov = get_instrumented_lines_dwarf(args.vmlinux, args.kernel_src)
+        done(t, f"→ {sum(len(v) for v in instrumented_cov.values()):,} lines in {len(instrumented_cov):,} files")
     except Exception as e:
         if not q:
-            print(f"  [2/4] \033[93mELF scan failed ({e}); miss highlighting disabled\033[0m")
+            print(f"  [2/3] \033[93mDWARF scan failed ({e}); miss highlighting disabled\033[0m")
 
-    t = step(4, 4, f"Writing {args.output}... ")
+    t = step(3, 3, f"Writing {args.output}... ")
     generate_html(cov, args.kernel_src, args.B, args.A, args.output, args.filter,
                   instrumented_cov)
     done(t)
