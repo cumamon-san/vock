@@ -5,52 +5,52 @@
 ## Сборка
 
 ```bash
-make                  # Собрать vock + kcov.so + SUD (по умолчанию clang, BTF определяется автоматически)
+make                  # Собрать vock + mode/kcov.so (по умолчанию clang)
 make CC=gcc           # Собрать с GCC вместо clang
 make clean            # Удалить артефакты сборки
 ```
 
 ## Запуск тестов
 
-Тесты запускаются через `selftest/run.py` посредством собранного бинаря:
+Функциональный тест запускается через `selftest/run.py` посредством собранного бинаря:
 
 ```bash
-./vock selftest --help                                         # Список всех 6 тестов
-./vock selftest 1 --on vng-kvm --kernel-src ~/linux           # KCOV + бэкенды syscall + syzlang
-./vock selftest 2 --on host --kernel-src ~/linux              # Покрытие через Intel PT / AMD LBR
+./vock selftest --on vng-kvm --kernel-src ~/linux   # Собрать KCOV-ядро, прогнать сбор покрытия
+./vock selftest --on vng-tcg --kernel-src ~/linux   # То же без KVM (CI)
 ```
 
-CI (`.github/workflows/ci.yml`) запускает тест 1 и тест 2 при каждом push. Линтер не настроен.
+Юнит-тесты генератора отчёта (Python):
+
+```bash
+python3 -m pytest tests/
+```
+
+CI (`.github/workflows/ci.yml`) собирает vock и запускает selftest при каждом push. Линтер не настроен.
 
 ## Архитектура
 
-**vock** — монолитный инструмент на C (~19K строк, ~60 исходных файлов) для трассировки пользовательских программ, сбора покрытия ядра и coverage-guided фаззинга системных вызовов.
+**vock** — инструмент на C для сбора покрытия ядра Linux через KCOV и генерации HTML-отчёта.
 
 ### Поток данных
 
-1. **Перехват syscall** — один из трёх бэкендов перехватывает системные вызовы и записывает их в формате syzlang (`trace.syz`)
-2. **Сбор покрытия** — аппаратный (Intel PT / AMD LBR) или программный (KCOV) бэкенд захватывает адреса инструкций ядра → `kerncov.log`
-3. **Декодирование** — `syscall/decode.c` преобразует перехваченные вызовы в strace-формат → `trace.log`
-4. **Отчётность** — `output.py` + `report/*.py` разрешают адреса через addr2line/BTF → `coverage.html`
-5. **Фаззинг (опционально)** — `fuzz/` мутирует `trace.syz`, повторно исполняет syscall и ранжирует по новизне покрытия
+1. **Запуск цели** — `vock <cmd>` форкает целевую программу с `LD_PRELOAD=mode/kcov.so`
+2. **Сбор покрытия** — `mode/kcov.c` (через KCOV: local + remote) захватывает адреса инструкций ядра → `kerncov.log`
+3. **Отчётность** — `output.py` + `report/*.py` разрешают адреса через addr2line → `coverage.html`
 
 ### Структура модулей
 
 | Директория | Назначение |
 |---|---|
-| `vock.c` | Точка входа: разбор CLI и оркестрация режимов |
-| `mode/` | Бэкенды покрытия: `hw.c` (Intel PT / AMD LBR), `intel_pt.c`, `amd_lbr.c`, `kcov.c` (shared lib через LD_PRELOAD) |
-| `syscall/` | Бэкенды трассировки (`ptrace/`, `sud/`, `ebpf/`), декодирование (`decode.c`), таблицы ABI (`x86_64/`, `aarch64/`) |
-| `fuzz/` | Движок фаззера: `fuzz.c` (оркестратор), `mutate.c` (мутации в стиле syzkaller), `covset.c` (новизна покрытия), `signal.c`, `state.c` |
-| `syzlang/` | Генерация вывода в формате syzlang для интеграции с syzkaller |
-| `prog2c/` | Конвертация syzlang-трассы в автономный C-репродьюсер |
-| `execprog/` | Прямое исполнение syscall (fork + syscall) |
-| `report/` | Python-генерация отчёта о покрытии (HTML, разрешение BTF, KASLR) |
-| `selftest/` | Функциональные тесты (`run.py`) |
+| `vock.c` | Точка входа: разбор CLI, запуск цели под KCOV, вызов генератора отчёта |
+| `mode/kcov.c` | Shared lib (LD_PRELOAD): включает KCOV local+remote в целевом процессе, пишет `kerncov.log` |
+| `output.py` | CLI генератора отчёта: читает `kerncov.log`, оркестрирует разрешение и вывод |
+| `report/` | Python-генерация отчёта: `resolve.py` (addr2line), `elf.py` (инструментированные PC/строки), `kaslr.py` (компенсация KASLR), `html.py` (HTML), `terminal.py` (текстовый вывод) |
+| `selftest/run.py` | Функциональный тест: сборка KCOV-ядра в virtme-ng и проверка сбора покрытия |
+| `tests/` | Юнит-тесты Python для генератора отчёта (`pytest`) |
 
 ### Ключевые архитектурные решения
 
-- **Три бэкенда syscall**: ptrace (универсальный), SUD/ядро ≥5.11 (без накладных расходов), eBPF (требует BTF)
-- **Два режима покрытия**: аппаратный (Intel PT/AMD LBR, только x86_64, максимальная скорость) и KCOV (программная инструментация, переносимый)
-- **Разделение по архитектурам**: x86_64 и aarch64 имеют отдельные таблицы имён и аргументов syscall в `syscall/x86_64/` и `syscall/aarch64/`
-- **Автоопределение при сборке**: поддержка BTF включается автоматически при наличии `/sys/kernel/btf/vmlinux`; все три бэкенда syscall компилируются всегда
+- **KCOV local + remote**: `mode/kcov.c` включает локальное покрытие (пути syscall текущей задачи) и удалённое (softirq/workqueue), затем объединяет в `kerncov.log`
+- **Разрешение адресов**: covered-PC из `kerncov.log` разрешаются в `file:line` через `addr2line` по `vmlinux`; инструментированные (но не покрытые) строки извлекаются из ELF (RELA) либо из DWARF `.debug_line` как fallback
+- **Компенсация KASLR**: смещение определяется автоматически по `vmlinux` и вычитается из адресов перед разрешением
+- **Требует root**: KCOV доступен через `/sys/kernel/debug/kcov`, поэтому `vock` требует привилегий root
